@@ -21,7 +21,7 @@ import Testing
 /// Tests for entity name length limits
 /// The longest valid HTML entity is ~31 characters (e.g., "CounterClockwiseContourIntegral")
 /// We set a limit of 64 characters which no valid entity will ever reach
-@Suite("Entity Name Length DoS Protection")
+@Suite("Entity Name Length DoS Protection", .serialized)
 struct EntityNameLengthTests {
 	/// Test that valid entities still work with limits in place
 	@Test func testValidEntitiesStillWork() throws {
@@ -132,7 +132,7 @@ struct EntityNameLengthTests {
 /// Current behavior without limits:
 /// - 5000 mixed tags: OK (~11s)
 /// - 10000 divs: CRASHES (SIGSEGV - stack overflow)
-@Suite("Nesting Depth DoS Protection")
+@Suite("Nesting Depth DoS Protection", .serialized)
 struct NestingDepthTests {
 	/// Test that reasonable nesting depths work correctly
 	@Test func testReasonableNestingWorks() throws {
@@ -322,7 +322,7 @@ struct NestingDepthTests {
 
 /// Tests for adoption agency algorithm limits
 /// The adoption agency is O(n²) in worst case - we need limits
-@Suite("Adoption Agency DoS Protection")
+@Suite("Adoption Agency DoS Protection", .serialized)
 struct AdoptionAgencyTests {
 	/// Test many overlapping formatting elements (within safe limits)
 	@Test func testManyOverlappingFormatting() throws {
@@ -376,7 +376,7 @@ struct AdoptionAgencyTests {
 // MARK: - ActiveFormattingTests
 
 /// Tests for active formatting elements list limits
-@Suite("Active Formatting Elements DoS Protection")
+@Suite("Active Formatting Elements DoS Protection", .serialized)
 struct ActiveFormattingTests {
 	/// Test many formatting elements without markers (within safe limits)
 	@Test func testManyFormattingElements() throws {
@@ -415,7 +415,7 @@ struct ActiveFormattingTests {
 // MARK: - CombinedDoSTests
 
 /// Tests combining multiple DoS vectors
-@Suite("Combined DoS Protection")
+@Suite("Combined DoS Protection", .serialized)
 struct CombinedDoSTests {
 	/// Test deep nesting with long entity names
 	/// With limits: long entity aborts quickly, nesting limited
@@ -511,7 +511,7 @@ struct CombinedDoSTests {
 // MARK: - DoSPerformanceTests
 
 /// Tests to establish performance baselines for DoS protection
-@Suite("DoS Protection Performance")
+@Suite("DoS Protection Performance", .serialized)
 struct DoSPerformanceTests {
 	/// Verify parsing completes within reasonable time for safe depth
 	@Test func testSafeNestingPerformance() throws {

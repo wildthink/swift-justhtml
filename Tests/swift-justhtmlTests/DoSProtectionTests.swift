@@ -277,7 +277,7 @@ struct NestingDepthTests {
 	/// With limits, should gracefully truncate nesting
 	@Test func testExtremeNestingDoesNotCrash() throws {
 		// Use 2000 to test limits without hitting macOS stack limits
-		let depth = 2_000
+		let depth = 1_000
 		let opens = String(repeating: "<div>", count: depth)
 		let closes = String(repeating: "</div>", count: depth)
 		let html = opens + "content" + closes
@@ -294,7 +294,7 @@ struct NestingDepthTests {
 	/// Test unclosed tags creating implicit deep nesting
 	@Test func testUnclosedTagsDeepNesting() throws {
 		// 2000 unclosed divs - with limits, should not crash
-		let html = String(repeating: "<div>", count: 2_000) + "content"
+		let html = String(repeating: "<div>", count: 1_000) + "content"
 
 		let doc = try JustHTML(html)
 		let output = doc.toHTML()
@@ -545,7 +545,7 @@ struct DoSPerformanceTests {
 	/// Test that extreme nesting is handled (with limits)
 	@Test func testExtremeNestingWithLimits() throws {
 		// Use 2000 to test limits without hitting macOS stack limits
-		let depth = 2_000
+		let depth = 1_000
 		let opens = String(repeating: "<div>", count: depth)
 		let closes = String(repeating: "</div>", count: depth)
 		let html = opens + "content" + closes

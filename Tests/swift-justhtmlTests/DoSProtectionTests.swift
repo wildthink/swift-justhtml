@@ -14,10 +14,9 @@
 
 import Foundation
 import Testing
-
 @testable import justhtml
 
-// MARK: - Entity Name Length DoS Tests
+// MARK: - EntityNameLengthTests
 
 /// Tests for entity name length limits
 /// The longest valid HTML entity is ~31 characters (e.g., "CounterClockwiseContourIntegral")
@@ -124,7 +123,7 @@ struct EntityNameLengthTests {
 	}
 }
 
-// MARK: - Nesting Depth DoS Tests
+// MARK: - NestingDepthTests
 
 /// Tests for maximum nesting depth limits
 /// Real web pages rarely exceed 100-200 levels of nesting
@@ -169,12 +168,12 @@ struct NestingDepthTests {
 		var html = ""
 		let depth = 400 // Safe depth
 
-		for i in 0..<depth {
+		for i in 0 ..< depth {
 			let tag = tags[i % tags.count]
 			html += "<\(tag)>"
 		}
 		html += "deep content"
-		for i in (0..<depth).reversed() {
+		for i in (0 ..< depth).reversed() {
 			let tag = tags[i % tags.count]
 			html += "</\(tag)>"
 		}
@@ -189,11 +188,11 @@ struct NestingDepthTests {
 		let depth = 200 // Tables are more complex
 		var html = ""
 
-		for _ in 0..<depth {
+		for _ in 0 ..< depth {
 			html += "<table><tr><td>"
 		}
 		html += "cell"
-		for _ in 0..<depth {
+		for _ in 0 ..< depth {
 			html += "</td></tr></table>"
 		}
 
@@ -241,11 +240,11 @@ struct NestingDepthTests {
 	@Test func testDeepSVGNesting() throws {
 		let depth = 300
 		var html = "<svg>"
-		for _ in 0..<depth {
+		for _ in 0 ..< depth {
 			html += "<g>"
 		}
 		html += "<text>deep</text>"
-		for _ in 0..<depth {
+		for _ in 0 ..< depth {
 			html += "</g>"
 		}
 		html += "</svg>"
@@ -259,11 +258,11 @@ struct NestingDepthTests {
 	@Test func testDeepMathMLNesting() throws {
 		let depth = 300
 		var html = "<math>"
-		for _ in 0..<depth {
+		for _ in 0 ..< depth {
 			html += "<mrow>"
 		}
 		html += "<mi>x</mi>"
-		for _ in 0..<depth {
+		for _ in 0 ..< depth {
 			html += "</mrow>"
 		}
 		html += "</math>"
@@ -318,7 +317,7 @@ struct NestingDepthTests {
 	}
 }
 
-// MARK: - Adoption Agency DoS Tests
+// MARK: - AdoptionAgencyTests
 
 /// Tests for adoption agency algorithm limits
 /// The adoption agency is O(n²) in worst case - we need limits
@@ -328,12 +327,12 @@ struct AdoptionAgencyTests {
 	@Test func testManyOverlappingFormatting() throws {
 		let count = 200
 		var html = ""
-		for i in 0..<count {
+		for i in 0 ..< count {
 			html += "<b id=\"\(i)\">"
 		}
 		html += "text"
 		// Close in wrong order to trigger adoption agency
-		for i in 0..<count {
+		for i in 0 ..< count {
 			html += "</b>"
 			if i % 10 == 0 {
 				html += "<p>para</p>" // Block elements interspersed
@@ -348,11 +347,11 @@ struct AdoptionAgencyTests {
 	/// Test adoption agency with nested blocks (within safe limits)
 	@Test func testAdoptionAgencyDeepBlocks() throws {
 		var html = ""
-		for _ in 0..<100 {
+		for _ in 0 ..< 100 {
 			html += "<b><div>"
 		}
 		html += "content"
-		for _ in 0..<100 {
+		for _ in 0 ..< 100 {
 			html += "</b></div>"
 		}
 
@@ -373,7 +372,7 @@ struct AdoptionAgencyTests {
 	}
 }
 
-// MARK: - Active Formatting Elements DoS Tests
+// MARK: - ActiveFormattingTests
 
 /// Tests for active formatting elements list limits
 @Suite("Active Formatting Elements DoS Protection")
@@ -383,7 +382,7 @@ struct ActiveFormattingTests {
 		var html = ""
 		let tags = ["a", "b", "code", "em", "i", "s", "small", "strong", "u"]
 
-		for i in 0..<200 {
+		for i in 0 ..< 200 {
 			let tag = tags[i % tags.count]
 			html += "<\(tag) class=\"c\(i)\">"
 		}
@@ -397,11 +396,11 @@ struct ActiveFormattingTests {
 	/// Test formatting elements with many markers (table cells)
 	@Test func testFormattingWithManyMarkers() throws {
 		var html = "<table>"
-		for _ in 0..<100 {
+		for _ in 0 ..< 100 {
 			html += "<tr><td><b><i>"
 		}
 		html += "cell"
-		for _ in 0..<100 {
+		for _ in 0 ..< 100 {
 			html += "</i></b></td></tr>"
 		}
 		html += "</table>"
@@ -412,7 +411,7 @@ struct ActiveFormattingTests {
 	}
 }
 
-// MARK: - Combined DoS Tests
+// MARK: - CombinedDoSTests
 
 /// Tests combining multiple DoS vectors
 @Suite("Combined DoS Protection")
@@ -424,11 +423,11 @@ struct CombinedDoSTests {
 		let depth = 200
 		var html = ""
 
-		for _ in 0..<depth {
+		for _ in 0 ..< depth {
 			html += "<div>&\(longEntity);"
 		}
 		html += "content"
-		for _ in 0..<depth {
+		for _ in 0 ..< depth {
 			html += "</div>"
 		}
 
@@ -448,7 +447,7 @@ struct CombinedDoSTests {
 		var html = ""
 
 		// Moderate nesting
-		for i in 0..<100 {
+		for i in 0 ..< 100 {
 			html += "<div class=\"d\(i)\">"
 		}
 
@@ -456,19 +455,19 @@ struct CombinedDoSTests {
 		html += "&\(longEntity);"
 
 		// Some formatting elements
-		for _ in 0..<50 {
+		for _ in 0 ..< 50 {
 			html += "<b><i><u>"
 		}
 
 		html += "stress test content"
 
 		// Close some formatting
-		for _ in 0..<25 {
+		for _ in 0 ..< 25 {
 			html += "</u></i></b>"
 		}
 
 		// Close divs
-		for _ in 0..<100 {
+		for _ in 0 ..< 100 {
 			html += "</div>"
 		}
 
@@ -482,7 +481,7 @@ struct CombinedDoSTests {
 		var html = "<!DOCTYPE html><html><head><title>Test</title></head><body>"
 
 		// Add various patterns
-		for i in 0..<50 {
+		for i in 0 ..< 50 {
 			// Moderate nesting section
 			let opens = String(repeating: "<div>", count: 10)
 			let closes = String(repeating: "</div>", count: 10)
@@ -508,7 +507,7 @@ struct CombinedDoSTests {
 	}
 }
 
-// MARK: - Performance Baseline Tests
+// MARK: - DoSPerformanceTests
 
 /// Tests to establish performance baselines for DoS protection
 @Suite("DoS Protection Performance")

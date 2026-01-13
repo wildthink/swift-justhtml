@@ -2,11 +2,11 @@
 
 A dependency-free HTML5 parser for Swift, following the WHATWG HTML parsing specification.
 
-Swift port of [justhtml](https://github.com/EmilStenstrom/justhtml) (Python) and [justjshtml](https://github.com/nicholasdille/justjshtml) (JavaScript).
+Swift port of [justhtml](https://github.com/EmilStenstrom/justhtml) (Python) and [justjshtml](https://github.com/simonw/justjshtml) (JavaScript).
 
 ## Features
 
-- **Full HTML5 Compliance** - Passes all 1,831 html5lib tree construction tests
+- **Full HTML5 Compliance** - Passes all 1,831 [html5lib-tests](https://github.com/html5lib/html5lib-tests) tree construction tests
 - **Zero Dependencies** - Pure Swift using only standard library and Foundation
 - **Cross-Platform** - macOS, iOS, tvOS, watchOS, visionOS, and Linux
 - **CSS Selectors** - Query documents using standard CSS selector syntax

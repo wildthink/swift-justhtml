@@ -1,6 +1,6 @@
 # swift-justhtml
 
-A dependency-free Swift implementation of an HTML5 parser following the WHATWG HTML parsing specification. This is a Swift port of [justhtml](https://github.com/EmilStenstrom/justhtml) (Python) and [justjshtml](https://github.com/nicholasdille/justjshtml) (JavaScript).
+A dependency-free Swift implementation of an HTML5 parser following the WHATWG HTML parsing specification. This is a Swift port of [justhtml](https://github.com/EmilStenstrom/justhtml) (Python) and [justjshtml](https://github.com/simonw/justjshtml) (JavaScript).
 
 ## Project Overview
 

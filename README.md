@@ -129,6 +129,32 @@ for error in doc.errors {
 }
 ```
 
+### DoS Protection
+
+swift-justhtml includes configurable limits to protect against denial-of-service attacks from malicious HTML input:
+
+```swift
+// Default limits are applied automatically (recommended)
+let doc = try JustHTML(untrustedHTML)
+
+// Custom limits for servers with more resources
+var limits = ParserLimits()
+limits.maxNestingDepth = 2048
+let doc = try JustHTML(html, limits: limits)
+
+// Stricter limits for resource-constrained devices
+let doc = try JustHTML(html, limits: .strict)
+
+// Disable limits for trusted content only
+let doc = try JustHTML(trustedHTML, limits: .unlimited)
+```
+
+Default limits:
+- `maxEntityNameLength`: 255 characters (prevents memory attacks from `&aaaa...`)
+- `maxNestingDepth`: 512 levels (prevents stack overflow from deep nesting)
+
+See the [DoS Protection Guide](https://kylehowells.github.io/swift-justhtml/documentation/justhtml/dosprotection) for details.
+
 ## Spec Compliance
 
 swift-justhtml implements the [WHATWG HTML parsing specification](https://html.spec.whatwg.org/multipage/parsing.html) exactly and passes all tests from the official [html5lib-tests](https://github.com/html5lib/html5lib-tests) suite (used by browser vendors), the same as [justhtml](https://github.com/EmilStenstrom/justhtml).

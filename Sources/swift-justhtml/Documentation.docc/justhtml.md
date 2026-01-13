@@ -42,6 +42,7 @@ let html = doc.toHTML()
 
 - <doc:GettingStarted>
 - <doc:Examples>
+- <doc:DoSProtection>
 - <doc:Performance>
 - <doc:Benchmarking>
 
@@ -54,6 +55,7 @@ let html = doc.toHTML()
 
 - ``FragmentContext``
 - ``Namespace``
+- ``ParserLimits``
 
 ### Streaming
 

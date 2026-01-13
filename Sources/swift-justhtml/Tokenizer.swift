@@ -110,19 +110,23 @@ public struct TokenizerOpts {
 	public var xmlCoercion: Bool
 	public var discardBom: Bool
 	public var scripting: Bool
+	/// Maximum length for named character reference entity names (DoS protection)
+	public var maxEntityNameLength: Int
 
 	public init(
 		initialState: Tokenizer.State = .data,
 		initialRawtextTag: String? = nil,
 		xmlCoercion: Bool = false,
 		discardBom: Bool = false,
-		scripting: Bool = false
+		scripting: Bool = false,
+		maxEntityNameLength: Int = ParserLimits.default.maxEntityNameLength
 	) {
 		self.initialState = initialState
 		self.initialRawtextTag = initialRawtextTag
 		self.xmlCoercion = xmlCoercion
 		self.discardBom = discardBom
 		self.scripting = scripting
+		self.maxEntityNameLength = maxEntityNameLength
 	}
 }
 
@@ -3025,15 +3029,35 @@ public final class Tokenizer {
 		var matchedEntity: String? = nil
 		var matchedLength = 0
 		var consumed = 0
+		let maxLength = self.opts.maxEntityNameLength
+		var hitLimit = false
 
 		while let ch = peek() {
 			if ch.isASCIILetter || ch.isASCIIDigit {
+				// Check entity name length limit (DoS protection)
+				// The longest valid HTML entity is ~31 chars, so hitting this limit
+				// means the entity is definitely invalid - stop looking for matches
+				// but continue consuming to emit the full text
+				if consumed >= maxLength {
+					hitLimit = true
+					// Consume remaining alphanumeric characters and emit them as text
+					self.flushCharRefTempBuffer()
+					self.emitCharRefString(entityName)
+					// Emit remaining characters directly
+					while let next = peek(), next.isASCIILetter || next.isASCIIDigit {
+						self.emitChar(next)
+						_ = self.consume()
+					}
+					self.state = self.returnState
+					return
+				}
+
 				entityName.append(ch)
 				_ = self.consume()
 				consumed += 1
 
-				// Check for match
-				if let decoded = NAMED_ENTITIES[entityName] {
+				// Check for match (only if we haven't exceeded the limit)
+				if !hitLimit, let decoded = NAMED_ENTITIES[entityName] {
 					matchedEntity = decoded
 					matchedLength = consumed
 				}

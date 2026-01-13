@@ -178,6 +178,9 @@ public final class TreeBuilder: TokenSink {
 	public var errors: [ParseError] = []
 	private var collectErrors: Bool
 
+	/// Maximum nesting depth (DoS protection)
+	private let maxNestingDepth: Int
+
 	/// Reference to tokenizer for switching states
 	public weak var tokenizer: Tokenizer? = nil
 
@@ -192,12 +195,14 @@ public final class TreeBuilder: TokenSink {
 		fragmentContext: FragmentContext? = nil,
 		iframeSrcdoc: Bool = false,
 		collectErrors: Bool = false,
-		scripting: Bool = false
+		scripting: Bool = false,
+		maxNestingDepth: Int = ParserLimits.default.maxNestingDepth
 	) {
 		self.fragmentContext = fragmentContext
 		self.iframeSrcdoc = iframeSrcdoc
 		self.collectErrors = collectErrors
 		self.scripting = scripting
+		self.maxNestingDepth = maxNestingDepth
 
 		if fragmentContext != nil {
 			self.document = Node(name: "#document-fragment")
@@ -2739,7 +2744,16 @@ public final class TreeBuilder: TokenSink {
 	{
 		let element = self.createElement(name: name, namespace: namespace, attrs: attrs)
 		self.insertNode(element)
-		self.openElements.append(element)
+
+		// DoS protection: limit nesting depth
+		// If we've hit the limit, don't push onto stack - element becomes effectively void
+		// This prevents stack overflow on extremely deeply nested documents
+		if self.openElements.count < self.maxNestingDepth {
+			self.openElements.append(element)
+		}
+		// Note: element is still in the DOM, just won't receive children
+		// Content will be inserted into the parent element instead
+
 		return element
 	}
 

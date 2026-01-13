@@ -25,6 +25,7 @@ public struct JustHTML {
 	///   - scripting: Whether scripting is enabled
 	///   - iframeSrcdoc: Whether parsing iframe srcdoc content
 	///   - xmlCoercion: Whether to coerce output for XML compatibility
+	///   - limits: Parser limits for DoS protection (defaults to sensible limits)
 	/// - Throws: StrictModeError if strict mode is enabled and a parse error occurs
 	public init(
 		_ html: String,
@@ -33,7 +34,8 @@ public struct JustHTML {
 		strict: Bool = false,
 		scripting: Bool = false,
 		iframeSrcdoc: Bool = false,
-		xmlCoercion: Bool = false
+		xmlCoercion: Bool = false,
+		limits: ParserLimits = .default
 	) throws {
 		self.fragmentContext = fragmentContext
 		self.encoding = nil
@@ -44,14 +46,16 @@ public struct JustHTML {
 			fragmentContext: fragmentContext,
 			iframeSrcdoc: iframeSrcdoc,
 			collectErrors: shouldCollect,
-			scripting: scripting
+			scripting: scripting,
+			maxNestingDepth: limits.maxNestingDepth
 		)
 
-		let opts = Self.tokenizerOpts(
+		var opts = Self.tokenizerOpts(
 			fragmentContext: fragmentContext,
 			xmlCoercion: xmlCoercion,
 			scripting: scripting
 		)
+		opts.maxEntityNameLength = limits.maxEntityNameLength
 
 		let tokenizer = Tokenizer(treeBuilder, opts: opts, collectErrors: shouldCollect)
 		treeBuilder.tokenizer = tokenizer
@@ -76,6 +80,7 @@ public struct JustHTML {
 	///   - scripting: Whether scripting is enabled
 	///   - iframeSrcdoc: Whether parsing iframe srcdoc content
 	///   - xmlCoercion: Whether to coerce output for XML compatibility
+	///   - limits: Parser limits for DoS protection (defaults to sensible limits)
 	/// - Throws: StrictModeError if strict mode is enabled and a parse error occurs
 	public init(
 		data: Data,
@@ -85,7 +90,8 @@ public struct JustHTML {
 		strict: Bool = false,
 		scripting: Bool = false,
 		iframeSrcdoc: Bool = false,
-		xmlCoercion: Bool = false
+		xmlCoercion: Bool = false,
+		limits: ParserLimits = .default
 	) throws {
 		let (html, detectedEncoding) = decodeHTML(data, transportEncoding: transportEncoding)
 
@@ -98,14 +104,16 @@ public struct JustHTML {
 			fragmentContext: fragmentContext,
 			iframeSrcdoc: iframeSrcdoc,
 			collectErrors: shouldCollect,
-			scripting: scripting
+			scripting: scripting,
+			maxNestingDepth: limits.maxNestingDepth
 		)
 
-		let opts = Self.tokenizerOpts(
+		var opts = Self.tokenizerOpts(
 			fragmentContext: fragmentContext,
 			xmlCoercion: xmlCoercion,
 			scripting: scripting
 		)
+		opts.maxEntityNameLength = limits.maxEntityNameLength
 
 		let tokenizer = Tokenizer(treeBuilder, opts: opts, collectErrors: shouldCollect)
 		treeBuilder.tokenizer = tokenizer

@@ -4,6 +4,10 @@
 // without crashing or consuming excessive resources. The limits are set high
 // enough that no real-world HTML document should ever hit them.
 //
+// NOTE: These tests are disabled on macOS due to smaller default stack size
+// which causes crashes when stress tests run in parallel with other tests.
+// All DoS protection tests run on Linux CI where stack limits are higher.
+//
 // Current findings:
 // - Entity names: 100K chars takes ~0.7s, 1M chars takes ~68s (needs limit)
 // - Nesting depth: 5000 mixed tags OK (~11s), 10000 divs crashes (SIGSEGV)
@@ -16,265 +20,263 @@ import Foundation
 import Testing
 @testable import justhtml
 
-// MARK: - EntityNameLengthTests
+#if !os(macOS)
 
-/// Tests for entity name length limits
-/// The longest valid HTML entity is ~31 characters (e.g., "CounterClockwiseContourIntegral")
-/// We set a limit of 64 characters which no valid entity will ever reach
-@Suite("Entity Name Length DoS Protection", .serialized)
-struct EntityNameLengthTests {
-	/// Test that valid entities still work with limits in place
-	@Test func testValidEntitiesStillWork() throws {
-		let html = "&amp; &lt; &gt; &quot; &nbsp; &copy; &mdash;"
-		let doc = try JustHTML(html)
-		let text = doc.toText()
+	// MARK: - EntityNameLengthTests
 
-		#expect(text.contains("&"))
-		#expect(text.contains("<"))
-		#expect(text.contains(">"))
-	}
+	/// Tests for entity name length limits
+	/// The longest valid HTML entity is ~31 characters (e.g., "CounterClockwiseContourIntegral")
+	/// We set a limit of 64 characters which no valid entity will ever reach
+	@Suite("Entity Name Length DoS Protection", .serialized)
+	struct EntityNameLengthTests {
+		/// Test that valid entities still work with limits in place
+		@Test func testValidEntitiesStillWork() throws {
+			let html = "&amp; &lt; &gt; &quot; &nbsp; &copy; &mdash;"
+			let doc = try JustHTML(html)
+			let text = doc.toText()
 
-	/// Test the longest valid HTML entity
-	@Test func testLongestValidEntity() throws {
-		// CounterClockwiseContourIntegral is one of the longest at 31 chars
-		let html = "&CounterClockwiseContourIntegral;"
-		let doc = try JustHTML(html)
-		let text = doc.toText()
-		#expect(text.contains("∳")) // The actual character
-	}
-
-	/// Test entity name at 64 characters (at the proposed limit)
-	@Test func testEntityNameAtBoundary() throws {
-		let name64 = String(repeating: "d", count: 64)
-		let html = "&\(name64);"
-
-		let doc = try JustHTML(html)
-		_ = doc.toHTML()
-	}
-
-	/// Test that long entity names complete quickly (with limit in place)
-	/// Without a limit, 100K chars takes ~0.7s. With limit, should be instant.
-	@Test func testLongEntityNamePerformance() throws {
-		let longEntityName = String(repeating: "a", count: 100_000)
-		let html = "<div>&\(longEntityName);</div>"
-
-		let start = Date()
-		let doc = try JustHTML(html)
-		let output = doc.toHTML()
-		let elapsed = Date().timeIntervalSince(start)
-
-		// With a 64-char limit, this should complete in under 0.1s
-		// The invalid entity should be preserved as literal text
-		#expect(output.contains("&"))
-		#expect(elapsed < 1.0, "Long entity name should be handled quickly with limit, took \(elapsed)s")
-	}
-
-	/// Test multiple long entity names complete quickly
-	@Test func testMultipleLongEntityNamesPerformance() throws {
-		let longName = String(repeating: "b", count: 50_000)
-		let html = "&\(longName); &\(longName); &\(longName);"
-
-		let start = Date()
-		let doc = try JustHTML(html)
-		_ = doc.toHTML()
-		let elapsed = Date().timeIntervalSince(start)
-
-		#expect(elapsed < 2.0, "Multiple long entities should complete quickly, took \(elapsed)s")
-	}
-
-	/// Test long entity name in attribute value completes quickly
-	@Test func testLongEntityNameInAttributePerformance() throws {
-		let longName = String(repeating: "c", count: 100_000)
-		let html = "<div title=\"&\(longName);\">text</div>"
-
-		let start = Date()
-		let doc = try JustHTML(html)
-		_ = doc.toHTML()
-		let elapsed = Date().timeIntervalSince(start)
-
-		#expect(elapsed < 1.0, "Long entity in attribute should complete quickly, took \(elapsed)s")
-	}
-
-	/// Test numeric character reference with many digits
-	/// The numeric value overflows quickly, so this should be fast regardless
-	@Test func testLongNumericCharRef() throws {
-		let longNumber = String(repeating: "9", count: 600)
-		let html = "&#\(longNumber);"
-
-		let start = Date()
-		let doc = try JustHTML(html)
-		_ = doc.toHTML()
-		let elapsed = Date().timeIntervalSince(start)
-
-		#expect(elapsed < 0.1, "Long numeric ref should complete quickly, took \(elapsed)s")
-	}
-
-	/// Test hex character reference with many digits
-	@Test func testLongHexCharRef() throws {
-		let longHex = String(repeating: "F", count: 600)
-		let html = "&#x\(longHex);"
-
-		let start = Date()
-		let doc = try JustHTML(html)
-		_ = doc.toHTML()
-		let elapsed = Date().timeIntervalSince(start)
-
-		#expect(elapsed < 0.1, "Long hex ref should complete quickly, took \(elapsed)s")
-	}
-}
-
-// MARK: - NestingDepthTests
-
-/// Tests for maximum nesting depth limits
-/// Real web pages rarely exceed 100-200 levels of nesting
-/// We set a limit of 512 levels which no real page should hit
-///
-/// Current behavior without limits:
-/// - 5000 mixed tags: OK (~11s)
-/// - 10000 divs: CRASHES (SIGSEGV - stack overflow)
-@Suite("Nesting Depth DoS Protection", .serialized)
-struct NestingDepthTests {
-	/// Test that reasonable nesting depths work correctly
-	@Test func testReasonableNestingWorks() throws {
-		// 100 levels is deep but reasonable for real pages
-		let depth = 100
-		let opens = String(repeating: "<div>", count: depth)
-		let closes = String(repeating: "</div>", count: depth)
-		let html = opens + "content" + closes
-
-		let doc = try JustHTML(html)
-		let output = doc.toHTML()
-
-		// Verify structure is preserved
-		#expect(output.contains("content"))
-		#expect(output.contains("<div>"))
-	}
-
-	/// Test 512 levels (proposed limit) works
-	@Test func testNestingAtProposedLimit() throws {
-		let depth = 512
-		let opens = String(repeating: "<div>", count: depth)
-		let closes = String(repeating: "</div>", count: depth)
-		let html = opens + "content" + closes
-
-		let doc = try JustHTML(html)
-		let output = doc.toHTML()
-		#expect(output.contains("content"))
-	}
-
-	/// Test deep nesting with mixed tags (within safe limits)
-	@Test func testDeepNestingMixedTags() throws {
-		let tags = ["div", "span", "section", "article", "main", "aside", "nav", "header"]
-		var html = ""
-		let depth = 400 // Safe depth
-
-		for i in 0 ..< depth {
-			let tag = tags[i % tags.count]
-			html += "<\(tag)>"
-		}
-		html += "deep content"
-		for i in (0 ..< depth).reversed() {
-			let tag = tags[i % tags.count]
-			html += "</\(tag)>"
+			#expect(text.contains("&"))
+			#expect(text.contains("<"))
+			#expect(text.contains(">"))
 		}
 
-		let doc = try JustHTML(html)
-		let output = doc.toHTML()
-		#expect(output.contains("deep content"))
-	}
-
-	/// Test deep nesting with tables (complex tree construction)
-	@Test func testDeepTableNesting() throws {
-		let depth = 200 // Tables are more complex
-		var html = ""
-
-		for _ in 0 ..< depth {
-			html += "<table><tr><td>"
-		}
-		html += "cell"
-		for _ in 0 ..< depth {
-			html += "</td></tr></table>"
+		/// Test the longest valid HTML entity
+		@Test func testLongestValidEntity() throws {
+			// CounterClockwiseContourIntegral is one of the longest at 31 chars
+			let html = "&CounterClockwiseContourIntegral;"
+			let doc = try JustHTML(html)
+			let text = doc.toText()
+			#expect(text.contains("∳")) // The actual character
 		}
 
-		let doc = try JustHTML(html)
-		let output = doc.toHTML()
-		#expect(output.contains("cell"))
-	}
+		/// Test entity name at 64 characters (at the proposed limit)
+		@Test func testEntityNameAtBoundary() throws {
+			let name64 = String(repeating: "d", count: 64)
+			let html = "&\(name64);"
 
-	/// Test deep nesting with templates
-	@Test func testDeepTemplateNesting() throws {
-		let depth = 200
-		let opens = String(repeating: "<template>", count: depth)
-		let closes = String(repeating: "</template>", count: depth)
-		let html = opens + "template content" + closes
-
-		let doc = try JustHTML(html)
-		_ = doc.toHTML()
-	}
-
-	/// Test deep nesting with formatting elements (adoption agency stress)
-	@Test func testDeepFormattingNesting() throws {
-		let depth = 300
-		let opens = String(repeating: "<b><i><u>", count: depth)
-		// Don't close them - forces adoption agency algorithm
-		let html = opens + "formatted text"
-
-		let doc = try JustHTML(html)
-		let output = doc.toHTML()
-		#expect(output.contains("formatted text"))
-	}
-
-	/// Test deep nesting in fragment context
-	@Test func testDeepNestingInFragment() throws {
-		let depth = 400
-		let opens = String(repeating: "<div>", count: depth)
-		let closes = String(repeating: "</div>", count: depth)
-		let html = opens + "content" + closes
-
-		let doc = try JustHTML(html, fragmentContext: FragmentContext("div"))
-		let output = doc.toHTML()
-		#expect(output.contains("content"))
-	}
-
-	/// Test deep SVG nesting
-	@Test func testDeepSVGNesting() throws {
-		let depth = 300
-		var html = "<svg>"
-		for _ in 0 ..< depth {
-			html += "<g>"
+			let doc = try JustHTML(html)
+			_ = doc.toHTML()
 		}
-		html += "<text>deep</text>"
-		for _ in 0 ..< depth {
-			html += "</g>"
-		}
-		html += "</svg>"
 
-		let doc = try JustHTML(html)
-		let output = doc.toHTML()
-		#expect(output.contains("deep"))
+		/// Test that long entity names complete quickly (with limit in place)
+		/// Without a limit, 100K chars takes ~0.7s. With limit, should be instant.
+		@Test func testLongEntityNamePerformance() throws {
+			let longEntityName = String(repeating: "a", count: 100_000)
+			let html = "<div>&\(longEntityName);</div>"
+
+			let start = Date()
+			let doc = try JustHTML(html)
+			let output = doc.toHTML()
+			let elapsed = Date().timeIntervalSince(start)
+
+			// With a 64-char limit, this should complete in under 0.1s
+			// The invalid entity should be preserved as literal text
+			#expect(output.contains("&"))
+			#expect(elapsed < 1.0, "Long entity name should be handled quickly with limit, took \(elapsed)s")
+		}
+
+		/// Test multiple long entity names complete quickly
+		@Test func testMultipleLongEntityNamesPerformance() throws {
+			let longName = String(repeating: "b", count: 50_000)
+			let html = "&\(longName); &\(longName); &\(longName);"
+
+			let start = Date()
+			let doc = try JustHTML(html)
+			_ = doc.toHTML()
+			let elapsed = Date().timeIntervalSince(start)
+
+			#expect(elapsed < 2.0, "Multiple long entities should complete quickly, took \(elapsed)s")
+		}
+
+		/// Test long entity name in attribute value completes quickly
+		@Test func testLongEntityNameInAttributePerformance() throws {
+			let longName = String(repeating: "c", count: 100_000)
+			let html = "<div title=\"&\(longName);\">text</div>"
+
+			let start = Date()
+			let doc = try JustHTML(html)
+			_ = doc.toHTML()
+			let elapsed = Date().timeIntervalSince(start)
+
+			#expect(elapsed < 1.0, "Long entity in attribute should complete quickly, took \(elapsed)s")
+		}
+
+		/// Test numeric character reference with many digits
+		/// The numeric value overflows quickly, so this should be fast regardless
+		@Test func testLongNumericCharRef() throws {
+			let longNumber = String(repeating: "9", count: 600)
+			let html = "&#\(longNumber);"
+
+			let start = Date()
+			let doc = try JustHTML(html)
+			_ = doc.toHTML()
+			let elapsed = Date().timeIntervalSince(start)
+
+			#expect(elapsed < 0.1, "Long numeric ref should complete quickly, took \(elapsed)s")
+		}
+
+		/// Test hex character reference with many digits
+		@Test func testLongHexCharRef() throws {
+			let longHex = String(repeating: "F", count: 600)
+			let html = "&#x\(longHex);"
+
+			let start = Date()
+			let doc = try JustHTML(html)
+			_ = doc.toHTML()
+			let elapsed = Date().timeIntervalSince(start)
+
+			#expect(elapsed < 0.1, "Long hex ref should complete quickly, took \(elapsed)s")
+		}
 	}
 
-	/// Test deep MathML nesting
-	@Test func testDeepMathMLNesting() throws {
-		let depth = 300
-		var html = "<math>"
-		for _ in 0 ..< depth {
-			html += "<mrow>"
-		}
-		html += "<mi>x</mi>"
-		for _ in 0 ..< depth {
-			html += "</mrow>"
-		}
-		html += "</math>"
+	// MARK: - NestingDepthTests
 
-		let doc = try JustHTML(html)
-		let output = doc.toHTML()
-		#expect(output.contains("x"))
-	}
+	/// Tests for maximum nesting depth limits
+	/// Real web pages rarely exceed 100-200 levels of nesting
+	/// We set a limit of 512 levels which no real page should hit
+	///
+	/// Current behavior without limits:
+	/// - 5000 mixed tags: OK (~11s)
+	/// - 10000 divs: CRASHES (SIGSEGV - stack overflow)
+	@Suite("Nesting Depth DoS Protection", .serialized)
+	struct NestingDepthTests {
+		/// Test that reasonable nesting depths work correctly
+		@Test func testReasonableNestingWorks() throws {
+			// 100 levels is deep but reasonable for real pages
+			let depth = 100
+			let opens = String(repeating: "<div>", count: depth)
+			let closes = String(repeating: "</div>", count: depth)
+			let html = opens + "content" + closes
 
-	#if !os(macOS)
-		// These tests are disabled on macOS due to smaller default stack size
-		// causing crashes when running in parallel with other tests
+			let doc = try JustHTML(html)
+			let output = doc.toHTML()
+
+			// Verify structure is preserved
+			#expect(output.contains("content"))
+			#expect(output.contains("<div>"))
+		}
+
+		/// Test 512 levels (proposed limit) works
+		@Test func testNestingAtProposedLimit() throws {
+			let depth = 512
+			let opens = String(repeating: "<div>", count: depth)
+			let closes = String(repeating: "</div>", count: depth)
+			let html = opens + "content" + closes
+
+			let doc = try JustHTML(html)
+			let output = doc.toHTML()
+			#expect(output.contains("content"))
+		}
+
+		/// Test deep nesting with mixed tags (within safe limits)
+		@Test func testDeepNestingMixedTags() throws {
+			let tags = ["div", "span", "section", "article", "main", "aside", "nav", "header"]
+			var html = ""
+			let depth = 400 // Safe depth
+
+			for i in 0 ..< depth {
+				let tag = tags[i % tags.count]
+				html += "<\(tag)>"
+			}
+			html += "deep content"
+			for i in (0 ..< depth).reversed() {
+				let tag = tags[i % tags.count]
+				html += "</\(tag)>"
+			}
+
+			let doc = try JustHTML(html)
+			let output = doc.toHTML()
+			#expect(output.contains("deep content"))
+		}
+
+		/// Test deep nesting with tables (complex tree construction)
+		@Test func testDeepTableNesting() throws {
+			let depth = 200 // Tables are more complex
+			var html = ""
+
+			for _ in 0 ..< depth {
+				html += "<table><tr><td>"
+			}
+			html += "cell"
+			for _ in 0 ..< depth {
+				html += "</td></tr></table>"
+			}
+
+			let doc = try JustHTML(html)
+			let output = doc.toHTML()
+			#expect(output.contains("cell"))
+		}
+
+		/// Test deep nesting with templates
+		@Test func testDeepTemplateNesting() throws {
+			let depth = 200
+			let opens = String(repeating: "<template>", count: depth)
+			let closes = String(repeating: "</template>", count: depth)
+			let html = opens + "template content" + closes
+
+			let doc = try JustHTML(html)
+			_ = doc.toHTML()
+		}
+
+		/// Test deep nesting with formatting elements (adoption agency stress)
+		@Test func testDeepFormattingNesting() throws {
+			let depth = 300
+			let opens = String(repeating: "<b><i><u>", count: depth)
+			// Don't close them - forces adoption agency algorithm
+			let html = opens + "formatted text"
+
+			let doc = try JustHTML(html)
+			let output = doc.toHTML()
+			#expect(output.contains("formatted text"))
+		}
+
+		/// Test deep nesting in fragment context
+		@Test func testDeepNestingInFragment() throws {
+			let depth = 400
+			let opens = String(repeating: "<div>", count: depth)
+			let closes = String(repeating: "</div>", count: depth)
+			let html = opens + "content" + closes
+
+			let doc = try JustHTML(html, fragmentContext: FragmentContext("div"))
+			let output = doc.toHTML()
+			#expect(output.contains("content"))
+		}
+
+		/// Test deep SVG nesting
+		@Test func testDeepSVGNesting() throws {
+			let depth = 300
+			var html = "<svg>"
+			for _ in 0 ..< depth {
+				html += "<g>"
+			}
+			html += "<text>deep</text>"
+			for _ in 0 ..< depth {
+				html += "</g>"
+			}
+			html += "</svg>"
+
+			let doc = try JustHTML(html)
+			let output = doc.toHTML()
+			#expect(output.contains("deep"))
+		}
+
+		/// Test deep MathML nesting
+		@Test func testDeepMathMLNesting() throws {
+			let depth = 300
+			var html = "<math>"
+			for _ in 0 ..< depth {
+				html += "<mrow>"
+			}
+			html += "<mi>x</mi>"
+			for _ in 0 ..< depth {
+				html += "</mrow>"
+			}
+			html += "</math>"
+
+			let doc = try JustHTML(html)
+			let output = doc.toHTML()
+			#expect(output.contains("x"))
+		}
 
 		/// Test that extreme nesting doesn't crash (with limit in place)
 		/// Without limits, deep nesting causes stack overflow
@@ -302,125 +304,123 @@ struct NestingDepthTests {
 			let output = doc.toHTML()
 			#expect(output.contains("content"))
 		}
-	#endif
 
-	/// Test performance with deep but safe nesting
-	@Test func testNestingPerformance() throws {
-		let depth = 500
-		let opens = String(repeating: "<div>", count: depth)
-		let closes = String(repeating: "</div>", count: depth)
-		let html = opens + "content" + closes
+		/// Test performance with deep but safe nesting
+		@Test func testNestingPerformance() throws {
+			let depth = 500
+			let opens = String(repeating: "<div>", count: depth)
+			let closes = String(repeating: "</div>", count: depth)
+			let html = opens + "content" + closes
 
-		let start = Date()
-		let doc = try JustHTML(html)
-		_ = doc.toHTML()
-		let elapsed = Date().timeIntervalSince(start)
+			let start = Date()
+			let doc = try JustHTML(html)
+			_ = doc.toHTML()
+			let elapsed = Date().timeIntervalSince(start)
 
-		// 500 levels should complete quickly
-		#expect(elapsed < 4.0, "500-level nesting should complete in under 4s, took \(elapsed)s")
-	}
-}
-
-// MARK: - AdoptionAgencyTests
-
-/// Tests for adoption agency algorithm limits
-/// The adoption agency is O(n²) in worst case - we need limits
-@Suite("Adoption Agency DoS Protection", .serialized)
-struct AdoptionAgencyTests {
-	/// Test many overlapping formatting elements (within safe limits)
-	@Test func testManyOverlappingFormatting() throws {
-		let count = 200
-		var html = ""
-		for i in 0 ..< count {
-			html += "<b id=\"\(i)\">"
+			// 500 levels should complete quickly
+			#expect(elapsed < 4.0, "500-level nesting should complete in under 4s, took \(elapsed)s")
 		}
-		html += "text"
-		// Close in wrong order to trigger adoption agency
-		for i in 0 ..< count {
-			html += "</b>"
-			if i % 10 == 0 {
-				html += "<p>para</p>" // Block elements interspersed
+	}
+
+	// MARK: - AdoptionAgencyTests
+
+	/// Tests for adoption agency algorithm limits
+	/// The adoption agency is O(n²) in worst case - we need limits
+	@Suite("Adoption Agency DoS Protection", .serialized)
+	struct AdoptionAgencyTests {
+		/// Test many overlapping formatting elements (within safe limits)
+		@Test func testManyOverlappingFormatting() throws {
+			let count = 200
+			var html = ""
+			for i in 0 ..< count {
+				html += "<b id=\"\(i)\">"
 			}
+			html += "text"
+			// Close in wrong order to trigger adoption agency
+			for i in 0 ..< count {
+				html += "</b>"
+				if i % 10 == 0 {
+					html += "<p>para</p>" // Block elements interspersed
+				}
+			}
+
+			let doc = try JustHTML(html)
+			let output = doc.toHTML()
+			#expect(output.contains("text"))
 		}
 
-		let doc = try JustHTML(html)
-		let output = doc.toHTML()
-		#expect(output.contains("text"))
+		/// Test adoption agency with nested blocks (within safe limits)
+		@Test func testAdoptionAgencyDeepBlocks() throws {
+			var html = ""
+			for _ in 0 ..< 100 {
+				html += "<b><div>"
+			}
+			html += "content"
+			for _ in 0 ..< 100 {
+				html += "</b></div>"
+			}
+
+			let doc = try JustHTML(html)
+			let output = doc.toHTML()
+			#expect(output.contains("content"))
+		}
+
+		/// Test Noah's Ark clause with many identical elements
+		@Test func testNoahsArkManyElements() throws {
+			// Noah's Ark clause limits to 3 identical elements
+			// Test with more to ensure limit is enforced
+			let html = String(repeating: "<b>", count: 200) + "text" + String(repeating: "</b>", count: 200)
+
+			let doc = try JustHTML(html)
+			let output = doc.toHTML()
+			#expect(output.contains("text"))
+		}
 	}
 
-	/// Test adoption agency with nested blocks (within safe limits)
-	@Test func testAdoptionAgencyDeepBlocks() throws {
-		var html = ""
-		for _ in 0 ..< 100 {
-			html += "<b><div>"
-		}
-		html += "content"
-		for _ in 0 ..< 100 {
-			html += "</b></div>"
+	// MARK: - ActiveFormattingTests
+
+	/// Tests for active formatting elements list limits
+	@Suite("Active Formatting Elements DoS Protection", .serialized)
+	struct ActiveFormattingTests {
+		/// Test many formatting elements without markers (within safe limits)
+		@Test func testManyFormattingElements() throws {
+			var html = ""
+			let tags = ["a", "b", "code", "em", "i", "s", "small", "strong", "u"]
+
+			for i in 0 ..< 200 {
+				let tag = tags[i % tags.count]
+				html += "<\(tag) class=\"c\(i)\">"
+			}
+			html += "formatted"
+
+			let doc = try JustHTML(html)
+			let output = doc.toHTML()
+			#expect(output.contains("formatted"))
 		}
 
-		let doc = try JustHTML(html)
-		let output = doc.toHTML()
-		#expect(output.contains("content"))
+		/// Test formatting elements with many markers (table cells)
+		@Test func testFormattingWithManyMarkers() throws {
+			var html = "<table>"
+			for _ in 0 ..< 100 {
+				html += "<tr><td><b><i>"
+			}
+			html += "cell"
+			for _ in 0 ..< 100 {
+				html += "</i></b></td></tr>"
+			}
+			html += "</table>"
+
+			let doc = try JustHTML(html)
+			let output = doc.toHTML()
+			#expect(output.contains("cell"))
+		}
 	}
 
-	/// Test Noah's Ark clause with many identical elements
-	@Test func testNoahsArkManyElements() throws {
-		// Noah's Ark clause limits to 3 identical elements
-		// Test with more to ensure limit is enforced
-		let html = String(repeating: "<b>", count: 200) + "text" + String(repeating: "</b>", count: 200)
+	// MARK: - CombinedDoSTests
 
-		let doc = try JustHTML(html)
-		let output = doc.toHTML()
-		#expect(output.contains("text"))
-	}
-}
-
-// MARK: - ActiveFormattingTests
-
-/// Tests for active formatting elements list limits
-@Suite("Active Formatting Elements DoS Protection", .serialized)
-struct ActiveFormattingTests {
-	/// Test many formatting elements without markers (within safe limits)
-	@Test func testManyFormattingElements() throws {
-		var html = ""
-		let tags = ["a", "b", "code", "em", "i", "s", "small", "strong", "u"]
-
-		for i in 0 ..< 200 {
-			let tag = tags[i % tags.count]
-			html += "<\(tag) class=\"c\(i)\">"
-		}
-		html += "formatted"
-
-		let doc = try JustHTML(html)
-		let output = doc.toHTML()
-		#expect(output.contains("formatted"))
-	}
-
-	/// Test formatting elements with many markers (table cells)
-	@Test func testFormattingWithManyMarkers() throws {
-		var html = "<table>"
-		for _ in 0 ..< 100 {
-			html += "<tr><td><b><i>"
-		}
-		html += "cell"
-		for _ in 0 ..< 100 {
-			html += "</i></b></td></tr>"
-		}
-		html += "</table>"
-
-		let doc = try JustHTML(html)
-		let output = doc.toHTML()
-		#expect(output.contains("cell"))
-	}
-}
-
-// MARK: - CombinedDoSTests
-
-/// Tests combining multiple DoS vectors
-@Suite("Combined DoS Protection", .serialized)
-struct CombinedDoSTests {
-	#if !os(macOS)
+	/// Tests combining multiple DoS vectors
+	@Suite("Combined DoS Protection", .serialized)
+	struct CombinedDoSTests {
 		/// Test deep nesting with long entity names
 		/// With limits: long entity aborts quickly, nesting limited
 		@Test func testDeepNestingWithLongEntities() throws {
@@ -445,109 +445,107 @@ struct CombinedDoSTests {
 			// With entity limit, this should be reasonably fast (generous for CI)
 			#expect(elapsed < 5.0, "Combined test should complete in reasonable time, took \(elapsed)s")
 		}
-	#endif
 
-	/// Test moderate stress combination
-	@Test func testCombinedStress() throws {
-		let longEntity = String(repeating: "f", count: 5_000)
-		var html = ""
+		/// Test moderate stress combination
+		@Test func testCombinedStress() throws {
+			let longEntity = String(repeating: "f", count: 5_000)
+			var html = ""
 
-		// Moderate nesting
-		for i in 0 ..< 100 {
-			html += "<div class=\"d\(i)\">"
+			// Moderate nesting
+			for i in 0 ..< 100 {
+				html += "<div class=\"d\(i)\">"
+			}
+
+			// Long entity (should abort quickly with limit)
+			html += "&\(longEntity);"
+
+			// Some formatting elements
+			for _ in 0 ..< 50 {
+				html += "<b><i><u>"
+			}
+
+			html += "stress test content"
+
+			// Close some formatting
+			for _ in 0 ..< 25 {
+				html += "</u></i></b>"
+			}
+
+			// Close divs
+			for _ in 0 ..< 100 {
+				html += "</div>"
+			}
+
+			let doc = try JustHTML(html)
+			let output = doc.toHTML()
+			#expect(output.contains("stress test content"))
 		}
 
-		// Long entity (should abort quickly with limit)
-		html += "&\(longEntity);"
+		/// Test large document with mixed patterns
+		@Test func testLargePathologicalDocument() throws {
+			var html = "<!DOCTYPE html><html><head><title>Test</title></head><body>"
 
-		// Some formatting elements
-		for _ in 0 ..< 50 {
-			html += "<b><i><u>"
+			// Add various patterns
+			for i in 0 ..< 50 {
+				// Moderate nesting section
+				let opens = String(repeating: "<div>", count: 10)
+				let closes = String(repeating: "</div>", count: 10)
+
+				// Long entity (should abort quickly)
+				let entity = "&" + String(repeating: "x", count: 500) + ";"
+
+				// Formatting mess
+				let formatting = "<b><i><u>text</b></i></u>"
+
+				html += "<section id=\"s\(i)\">\(opens)\(entity)\(formatting)\(closes)</section>"
+			}
+
+			html += "</body></html>"
+
+			let start = Date()
+			let doc = try JustHTML(html)
+			let output = doc.toHTML()
+			let elapsed = Date().timeIntervalSince(start)
+
+			#expect(output.contains("text"))
+			#expect(elapsed < 5.0, "Large document should complete in reasonable time, took \(elapsed)s")
 		}
-
-		html += "stress test content"
-
-		// Close some formatting
-		for _ in 0 ..< 25 {
-			html += "</u></i></b>"
-		}
-
-		// Close divs
-		for _ in 0 ..< 100 {
-			html += "</div>"
-		}
-
-		let doc = try JustHTML(html)
-		let output = doc.toHTML()
-		#expect(output.contains("stress test content"))
 	}
 
-	/// Test large document with mixed patterns
-	@Test func testLargePathologicalDocument() throws {
-		var html = "<!DOCTYPE html><html><head><title>Test</title></head><body>"
+	// MARK: - DoSPerformanceTests
 
-		// Add various patterns
-		for i in 0 ..< 50 {
-			// Moderate nesting section
-			let opens = String(repeating: "<div>", count: 10)
-			let closes = String(repeating: "</div>", count: 10)
+	/// Tests to establish performance baselines for DoS protection
+	@Suite("DoS Protection Performance", .serialized)
+	struct DoSPerformanceTests {
+		/// Verify parsing completes within reasonable time for safe depth
+		@Test func testSafeNestingPerformance() throws {
+			let depth = 500
+			let opens = String(repeating: "<div>", count: depth)
+			let closes = String(repeating: "</div>", count: depth)
+			let html = opens + "content" + closes
 
-			// Long entity (should abort quickly)
-			let entity = "&" + String(repeating: "x", count: 500) + ";"
+			let start = Date()
+			let doc = try JustHTML(html)
+			_ = doc.toHTML()
+			let elapsed = Date().timeIntervalSince(start)
 
-			// Formatting mess
-			let formatting = "<b><i><u>text</b></i></u>"
-
-			html += "<section id=\"s\(i)\">\(opens)\(entity)\(formatting)\(closes)</section>"
+			#expect(elapsed < 4.0, "500-level nesting should complete quickly, took \(elapsed)s")
 		}
 
-		html += "</body></html>"
+		/// Verify long entity names complete quickly with limit
+		@Test func testLongEntityPerformance() throws {
+			let longEntity = String(repeating: "a", count: 100_000)
+			let html = "&\(longEntity);"
 
-		let start = Date()
-		let doc = try JustHTML(html)
-		let output = doc.toHTML()
-		let elapsed = Date().timeIntervalSince(start)
+			let start = Date()
+			let doc = try JustHTML(html)
+			_ = doc.toHTML()
+			let elapsed = Date().timeIntervalSince(start)
 
-		#expect(output.contains("text"))
-		#expect(elapsed < 5.0, "Large document should complete in reasonable time, took \(elapsed)s")
-	}
-}
+			// With entity name limit, should complete quickly
+			#expect(elapsed < 1.0, "Long entity should complete quickly with limit, took \(elapsed)s")
+		}
 
-// MARK: - DoSPerformanceTests
-
-/// Tests to establish performance baselines for DoS protection
-@Suite("DoS Protection Performance", .serialized)
-struct DoSPerformanceTests {
-	/// Verify parsing completes within reasonable time for safe depth
-	@Test func testSafeNestingPerformance() throws {
-		let depth = 500
-		let opens = String(repeating: "<div>", count: depth)
-		let closes = String(repeating: "</div>", count: depth)
-		let html = opens + "content" + closes
-
-		let start = Date()
-		let doc = try JustHTML(html)
-		_ = doc.toHTML()
-		let elapsed = Date().timeIntervalSince(start)
-
-		#expect(elapsed < 4.0, "500-level nesting should complete quickly, took \(elapsed)s")
-	}
-
-	/// Verify long entity names complete quickly with limit
-	@Test func testLongEntityPerformance() throws {
-		let longEntity = String(repeating: "a", count: 100_000)
-		let html = "&\(longEntity);"
-
-		let start = Date()
-		let doc = try JustHTML(html)
-		_ = doc.toHTML()
-		let elapsed = Date().timeIntervalSince(start)
-
-		// With entity name limit, should complete quickly
-		#expect(elapsed < 1.0, "Long entity should complete quickly with limit, took \(elapsed)s")
-	}
-
-	#if !os(macOS)
 		/// Test that extreme nesting is handled (with limits)
 		@Test func testExtremeNestingWithLimits() throws {
 			let depth = 600
@@ -564,5 +562,6 @@ struct DoSPerformanceTests {
 			#expect(output.contains("content"))
 			#expect(elapsed < 5.0, "Deep nesting with limits should complete quickly, took \(elapsed)s")
 		}
-	#endif
-}
+	}
+
+#endif // !os(macOS)

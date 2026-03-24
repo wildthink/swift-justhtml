@@ -538,7 +538,7 @@ public enum Serialize {
 	private static func convertTable(_ table: Node, context: inout MarkdownContext) {
 		var rows: [[String]] = []
 
-		// Find rows (handle thead, tbody, tr directly under table)
+		/// Find rows (handle thead, tbody, tr directly under table)
 		func findRows(_ node: Node) {
 			for child in node.children {
 				if child.name == "tr" {

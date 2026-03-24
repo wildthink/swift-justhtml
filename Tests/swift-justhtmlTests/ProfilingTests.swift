@@ -391,7 +391,7 @@ func loadSampleFile(_ name: String) throws -> String {
 	print("SCALING BEHAVIOR ANALYSIS")
 	print(String(repeating: "=", count: 70))
 
-	// Generate HTML of different sizes
+	/// Generate HTML of different sizes
 	func generateHTML(paragraphs: Int) -> String {
 		var html = "<!DOCTYPE html><html><head><title>Test</title></head><body>"
 		for i in 0 ..< paragraphs {
@@ -500,7 +500,7 @@ func loadSampleFile(_ name: String) throws -> String {
 		timer.stop()
 		let fullParseMs = timer.elapsedMilliseconds
 
-		// Count nodes
+		/// Count nodes
 		func countAllNodes(_ node: Node) -> Int {
 			return 1 + node.children.reduce(0) { $0 + countAllNodes($1) }
 		}

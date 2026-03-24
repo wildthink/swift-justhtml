@@ -1888,7 +1888,6 @@ public final class Tokenizer {
 					if !self.nameBuffer.isEmpty {
 						self.currentAttrName.append(String(decoding: self.nameBuffer, as: UTF8.self))
 					}
-					self.storeCurrentAttr()
 					self.state = .afterAttributeName
 					return
 
@@ -1984,6 +1983,7 @@ public final class Tokenizer {
 				break
 
 			case "/":
+				self.storeCurrentAttr()
 				self.state = .selfClosingStartTag
 
 			case "=":

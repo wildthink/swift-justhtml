@@ -168,23 +168,23 @@ func compareOutputs(_ expected: String, _ actual: String) -> Bool {
 }
 
 func getTestsDirectory() -> URL? {
+	return getTestsDirectories().first
+}
+
+func getTestsDirectories() -> [URL] {
 	let fileManager = FileManager.default
 	let cwd = fileManager.currentDirectoryPath
 	let cwdUrl = URL(fileURLWithPath: cwd)
 
-	// Check several possible locations (CI puts html5lib-tests at repo root)
 	let possiblePaths = [
+		// External html5lib-tests repo (CI puts it at repo root)
 		cwdUrl.appendingPathComponent("html5lib-tests/tree-construction"),
 		cwdUrl.appendingPathComponent("../html5lib-tests/tree-construction"),
+		// Bundled test resources (project-specific test data)
+		Bundle.module.bundleURL.appendingPathComponent("html5lib-tests/tree-construction"),
 	]
 
-	for path in possiblePaths {
-		if fileManager.fileExists(atPath: path.path) {
-			return path
-		}
-	}
-
-	return nil
+	return possiblePaths.filter { fileManager.fileExists(atPath: $0.path) }
 }
 
 func listDatFiles(in directory: URL) -> [URL] {
@@ -226,12 +226,23 @@ struct TreeConstructionTestResult {
 func runTreeConstructionTests(
 	files: [String]? = nil, showFailures: Bool = false, debug: Bool = false
 ) -> (passed: Int, failed: Int, results: [TreeConstructionTestResult]) {
-	guard let testsDir = getTestsDirectory() else {
+	let testsDirs = getTestsDirectories()
+	if testsDirs.isEmpty {
 		print("Could not find html5lib-tests directory")
 		return (0, 0, [])
 	}
 
-	var datFiles = listDatFiles(in: testsDir)
+	// Gather .dat files from all directories, deduplicating by filename
+	var seenFilenames = Set<String>()
+	var datFiles: [URL] = []
+	for dir in testsDirs {
+		for file in listDatFiles(in: dir) {
+			if seenFilenames.insert(file.lastPathComponent).inserted {
+				datFiles.append(file)
+			}
+		}
+	}
+	datFiles.sort { $0.lastPathComponent < $1.lastPathComponent }
 
 	// Filter to specific files if requested
 	if let files = files, !files.isEmpty {
@@ -410,13 +421,24 @@ func runTreeConstructionTests(
 }
 
 @Test func html5libAllTreeConstructionTests() async throws {
-	guard let testsDir = getTestsDirectory() else {
+	let testsDirs = getTestsDirectories()
+	if testsDirs.isEmpty {
 		print("Could not find html5lib-tests directory")
 		#expect(Bool(false))
 		return
 	}
 
-	let datFiles = listDatFiles(in: testsDir)
+	// Gather .dat files from all directories, deduplicating by filename
+	var seenFilenames = Set<String>()
+	var datFiles: [URL] = []
+	for dir in testsDirs {
+		for file in listDatFiles(in: dir) {
+			if seenFilenames.insert(file.lastPathComponent).inserted {
+				datFiles.append(file)
+			}
+		}
+	}
+	datFiles.sort { $0.lastPathComponent < $1.lastPathComponent }
 	print("Found \(datFiles.count) test files")
 
 	var totalPassed = 0

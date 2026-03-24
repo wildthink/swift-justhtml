@@ -1,0 +1,56 @@
+#data
+<a href = "http://example.com">link</a>
+#errors
+#document
+| <html>
+|   <head>
+|   <body>
+|     <a>
+|       href="http://example.com"
+|       "link"
+
+#data
+<div class = "foo" id = "bar">text</div>
+#errors
+#document
+| <html>
+|   <head>
+|   <body>
+|     <div>
+|       class="foo"
+|       id="bar"
+|       "text"
+
+#data
+<input type = 'text' value = 'hello'>
+#errors
+#document
+| <html>
+|   <head>
+|   <body>
+|     <input>
+|       type="text"
+|       value="hello"
+
+#data
+<a href="no-spaces" title = "with spaces">x</a>
+#errors
+#document
+| <html>
+|   <head>
+|   <body>
+|     <a>
+|       href="no-spaces"
+|       title="with spaces"
+|       "x"
+
+#data
+<div data-x  =  "spaced">y</div>
+#errors
+#document
+| <html>
+|   <head>
+|   <body>
+|     <div>
+|       data-x="spaced"
+|       "y"

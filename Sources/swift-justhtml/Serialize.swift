@@ -3,6 +3,7 @@
 import Foundation
 
 public enum Serialize {
+
 	// MARK: - Test Format (html5lib-tests)
 
 	/// Serialize node to html5lib test format

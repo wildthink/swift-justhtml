@@ -3844,20 +3844,23 @@ public final class TreeBuilder: TokenSink {
 
 			switch node.name {
 				case "select":
-					// Select doesn't check isHTML per spec
-					// Per spec: check if there's a table ancestor to determine inSelect vs inSelectInTable
-					if !last {
-						// Check ancestors for table or template
-						for j in stride(from: i - 1, through: 0, by: -1) {
-							let ancestor = self.openElements[j]
-							if ancestor.name == "template" {
-								// Template breaks the chain - use inSelect
-								break
-							}
-							if ancestor.name == "table" {
-								self.insertionMode = .inSelectInTable
-								return
-							}
+					if last {
+						// In fragment parsing, select context uses inBody (matching
+						// resetInsertionModeForFragment). The select element is only
+						// the virtual context element, not actually on the stack.
+						self.insertionMode = .inBody
+						return
+					}
+					// Check if there's a table ancestor to determine inSelect vs inSelectInTable
+					for j in stride(from: i - 1, through: 0, by: -1) {
+						let ancestor = self.openElements[j]
+						if ancestor.name == "template" {
+							// Template breaks the chain - use inSelect
+							break
+						}
+						if ancestor.name == "table" {
+							self.insertionMode = .inSelectInTable
+							return
 						}
 					}
 					self.insertionMode = .inSelect
